@@ -1,0 +1,72 @@
+import pandas as pd
+from sklearn.model_selection import train_test_split
+from sklearn import svm 
+import seaborn as sns 
+import matplotlib.pyplot as plt
+from sklearn.metrics import mean_squared_error
+import numpy as np
+from sklearn.naive_bayes import GaussianNB
+from sklearn.ensemble import RandomForestRegressor
+
+# Load the data into Colab.
+from google.colab import files # Use to load data on Google Colab
+uploaded = files.upload() # Use to load data on Google Colab
+#Store the data into a data frame. 
+migration = pd.read_csv('migration.csv')
+
+# Print the first 5 rows.
+migration.head(5)
+migration.info()
+migration.isna().sum()
+
+migration["Value"].fillna(migration["Value"].median(),inplace=True)
+migration['Measure'].unique()
+migration['Measure'].replace("Arrivals",0,inplace=True)
+migration['Measure'].replace("Departures",1,inplace=True)
+migration['Measure'].replace("Net",2,inplace=True)
+migration['Country'].unique()
+migration['Country'] = pd.factorize(migration.Country)[0]
+migration['Citizenship'].unique()
+migration['Citizenship'].replace('New Zealand Citizen',0,inplace=True)
+migration['Citizenship'].replace('Australian Citizen',1,inplace=True)
+migration['Citizenship'].replace('Total All Citizenships',2,inplace=True)
+
+# We will use the Pearson Correlation method.
+plt.figure(figsize=(9,5)) 
+corr = migration.corr() 
+sns.heatmap(corr, annot=True, cmap='Blues')
+
+x_data = migration[['Country','Measure','Year','Citizenship']]
+y_data = migration['Value']
+
+x_training_data, x_test_data, y_training_data, y_test_data = train_test_split(x_data, y_data, test_size = 0.30, random_state=9)
+
+# Create model object. 
+model_rf = RandomForestRegressor(n_estimators=70,max_features = 3,max_depth=5,n_jobs=-1)
+# Train the model on the training data.
+model_rf.fit(x_training_data, y_training_data)
+# Make predictions on the test data. 
+predictions_rf = model_rf.predict(x_test_data)
+
+model_rf.score(x_test_data, y_test_data)
+
+# Visualize number of migrations by year in a line graph.
+grouped = migration.groupby(['Year']).aggregate({'Value' : 'sum'}).reset_index()
+grouped = grouped.astype(int)
+plt.figure(figsize=(9,5))
+plt.plot(grouped['Year'], grouped['Value'], color='darkblue',  marker='o')
+plt.ticklabel_format(style='plain')
+plt.xlabel('Year', fontsize=12)
+plt.ylabel('Values', fontsize=12)
+plt.title('Values by Year', fontsize=15)
+plt.grid()
+plt.show()
+
+# Visualize number of migrations by year in a bar plot graph.
+plt.figure(figsize=(9, 5))
+plt.ticklabel_format(style='plain')
+ax = sns.barplot(grouped['Year'], grouped['Value'], color='darkblue')
+ax.set_xticklabels(ax.get_xticklabels(),rotation = 90, size = 10)
+plt.xlabel('Date', fontsize=12)
+plt.ylabel('Values', fontsize=12)
+plt.title('Values by Year', fontsize=15)
