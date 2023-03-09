@@ -5,11 +5,17 @@ date: "2023-01-27"
 ---
 
 Upload Data
+```{r}
+library(readr)
+urlfile <- 'https://raw.githubusercontent.com/Celv03/Final-Year-Project/main/Migration%20Full%20Data%20-%20Clear%20Names.csv'
+MgrDt_Github <- read_csv(url(urlfile)) #Upload from Github
+MgrDt_Github
+MgrDt
+```
 
 ```{r}
 MgrDt <- read.csv(file = "/Users/kelvin/Desktop/Maths/Final Year Project/Migration Full Data - Clear Names.csv", blank.lines.skip = FALSE)
 colnames(MgrDt)
-
 ```
 
 Scale our GDP wrt to Population
@@ -244,7 +250,7 @@ for (Country in euro.cntry){
 }
 v <- v[2:(n+1),] # remove our NA's
 row.names(v) <- euro.cntry
-
+Orgn.co.dt <- v
 ```
 
 Summarise our data to just origin countries & years
@@ -297,6 +303,16 @@ row.names(w) <- euro.Cont
 conti_data <- w
 conti_data
 ```
+
+```{r}
+write.csv(Orgn.co.dt, "/Users/kelvin/Desktop/Maths/Final Year Project/OriginCountrySummary.csv")
+```
+
+```{r}
+write.csv(Cnty_data, "/Users/kelvin/Desktop/Maths/Final Year Project/AnnualCountryMigration.csv")
+```
+
+
 
 PCA Example
 
@@ -383,9 +399,9 @@ hierarchial Clustering complete vs average vs single
 x <- Orgn.co.dt
 hc.complete <- hclust(dist(scale(x)), method = 'complete')
 hc.average <- hclust(dist(scale(x)), method = 'average')
-hc.single <- hclust(dist(x), method = 'single')
+hc.single <- hclust(dist(scale(x)), method = 'single')
 plot(hc.complete, main = " Complete Linkage ", xlab = "", sub = "", cex = .9)
-abline(h = 9000200, col = 'red')
+abline(h = 7.5, col = 'red')
 plot(hc.average , main = " Average Linkage ", xlab = "", sub = "", cex = .9)
 plot(hc.single, main = " Single Linkage ", xlab = "", sub = "", cex = .9)
 ```
@@ -429,7 +445,7 @@ plot(gcv, type = 'o', xlab = 'No. of Clusters', ylab = 'Generalised Cross Valida
 using complete hierarchial clustering with n = 12 find mean and standard deviation on all groups then decide which group to use for modelling
 
 ```{r}
-n <- 4
+n <- 5
 (sort(Country_Grp <- cutree(hc.complete,n))) # will look at 2,3,7
 #(sort(Country_Grp <- sort(km.out11$cluster)) )# will look at 2,3,7
 analysis <- c()
@@ -730,9 +746,11 @@ df.Impact <- data.frame(Country = c(), KeyIndicators=c())
 df.Results <- data.frame(Country = c(), Migration = c())
 df.Actuals <- data.frame(Year = c(), Country = c(), Migration = c())
 df.RMSE <- data.frame(Country = c(), RMSE=c())
-for (i in c(6, 7, 9)){
+for (i in 1:4){
   Grp1 <- names(Country_Grp[Country_Grp == i])
   Grp10dt <- df.Eurodt[df.Eurodt$ISO.O %in% Grp1,]
+  # Grp10dt.save <- Grp10dt 
+  # Grp10dt <- Grp10dt[(Grp10dt$Total > quantile(Grp10dt$Total, c(.06))) & (Grp10dt$Total < quantile(Grp10dt$Total, c(.94))), ]
   #Grp10dt <- df.Eurodt[Cnty_data$ISO.O %in% Grp1,]
   #Grp10dt <- Grp10dt[Grp10dt$Year > 2004,]
   grpex <- Filter(function(x)(typeof(x) != 'character'), Grp10dt)
@@ -766,9 +784,12 @@ for (i in c(6, 7, 9)){
   df.Results <- rbind(df.Results, cbind(Country = names(Test.Pred.bag.21), Migration = Test.Pred.bag.21))
   df.Actuals <- rbind(df.Actuals, data.frame(Year = as.numeric(substr(names(Test.Actuals), 1, 4)), Country = substr(names(Test.Actuals), 6, 8), Migration = Test.Actuals))
 }
-write.csv(df.Results,"/Users/kelvin/Desktop/Maths/Final Year Project/CognosResult.csv", row.names=FALSE)
-write.csv(df.Actuals,"/Users/kelvin/Desktop/Maths/Final Year Project/CognosActuals.csv", row.names=FALSE)
-write.csv(df.RMSE,"/Users/kelvin/Desktop/Maths/Final Year Project/CognosRMSE.csv", row.names=FALSE)
-write.csv(df.Impact,"/Users/kelvin/Desktop/Maths/Final Year Project/CognosImpact.csv", row.names=FALSE)
-
+# write.csv(df.Results,"/Users/kelvin/Desktop/Maths/Final Year Project/CognosResult.csv", row.names=FALSE)
+# write.csv(df.Actuals,"/Users/kelvin/Desktop/Maths/Final Year Project/CognosActuals.csv", row.names=FALSE)
+# write.csv(df.RMSE,"/Users/kelvin/Desktop/Maths/Final Year Project/CognosRMSE.csv", row.names=FALSE)
+# write.csv(df.Impact,"/Users/kelvin/Desktop/Maths/Final Year Project/CognosImpact.csv", row.names=FALSE)
+df.Results
+df.Actuals
+df.RMSE
+df.Impact
 ```
