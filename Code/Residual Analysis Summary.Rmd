@@ -1,0 +1,429 @@
+---
+title: "Residual Analysis ML Models Summar"
+output: html_document
+date: "2023-02-19"
+---
+
+```{r}
+scales <- c()
+#Grp1 <- c('SRB','BGR', 'CHE', 'AUT')
+for (i in Grp1){
+  scales <- cbind(scales, c(attr(scale(Cnty_data[substr(rownames(Cnty_data), 1,3) == i,'Pop.p100k']), 'scaled:scale'), attr(scale(Cnty_data[substr(rownames(Cnty_data), 1,3) == i,'Pop.p100k']), 'scaled:center')) )
+  Cnty_data[substr(rownames(Cnty_data), 1,3) == i,'ScaledPop.p100k'] <- scale(Cnty_data[substr(rownames(Cnty_data), 1,3) == i,'Pop.p100k'])
+
+}
+colnames(scales) <- unique(Grp1)
+row.names(scales) <- c('scale', 'center')
+
+scales
+```
+
+```{r}
+plot(Grp10dt2[substr(rownames(Grp10dt2), 1,3) == 'SRB','Year'],Grp10dt2[substr(rownames(Grp10dt2), 1,3) == 'SRB','Total'], type = 'l', ylim = c(-3,3), xlim = c(2000,2025))
+for (i in 1:length(Grp1)){
+  lines(Grp10dt2[substr(rownames(Grp10dt2), 1,3) == Grp1[i],'Year'],Grp10dt2[substr(rownames(Grp10dt2), 1,3) == Grp1[i],'Total'], type = 'l', col = i)
+}
+legend('topright', inset=.02, title="Model",
+       Grp1,
+       fill=c(1:length(Grp1)), horiz=FALSE, cex=.9)
+
+#plot(Cnty_data[substr(rownames(Cnty_data), 1,3) == 'SRB','Year'],Cnty_data[substr(rownames(Cnty_data), 1,3) == 'SRB','ScaledPop.p100k'], type = 'o')
+#lines(Cnty_data[substr(rownames(Cnty_data), 1,3) == 'AUT','Year'],Cnty_data[substr(rownames(Cnty_data), 1,3) == 'AUT','ScaledPop.p100k'], col = 2, type = 'o')
+#lines(Cnty_data[substr(rownames(Cnty_data), 1,3) == 'BGR','Year'],Cnty_data[substr(rownames(Cnty_data), 1,3) == 'BGR','ScaledPop.p100k'], col = 6, type = 'o')
+#lines(Cnty_data[substr(rownames(Cnty_data), 1,3) == 'CHE','Year'],Cnty_data[substr(rownames(Cnty_data), 1,3) == 'CHE','ScaledPop.p100k'], col = 12, type = 'o')
+```
+
+
+# Function to unscale
+```{r}
+unscaler <- function(data){
+    for (i in Grp1){
+      data[substr(names(data),1,3) == i] <-  data[substr(names(data),1,3) == i]*scales["scale",i] + scales["center",i]
+    }
+  return(data)
+}
+```
+
+
+
+```{r}
+Cnty_data2 <- Cnty_data[substr(rownames(Cnty_data), 1,3) %in% Grp1,]
+Grp10dt2 <- Cnty_data2[,1:17]
+Grp10dt2$Total <- (Cnty_data2$Pop.p100k)
+Grp10dt2 <- Grp10dt2[(Grp10dt2$Total > quantile(Grp10dt2$Total, c(.05))) & (Grp10dt2$Total < quantile(Grp10dt2$Total, c(.95))), ]
+#Grp10dt2 <- Cnty_data2[!(rownames(Cnty_data2) %in% rownames(outliers.point)),1:17]
+#Grp10dt2$Total <- Cnty_data2[!(rownames(Cnty_data2) %in% rownames(outliers.point)),18]
+#Grp10dt2 <- Cnty_data2[!(rownames(Cnty_data2) %in% c('CHE 2001','CHE 2002', "CHE 2000", "CHE 2003","CHE 2004", "CHE 2005", "CHE 2006") ),1:17]
+#Grp10dt2$Total <- Cnty_data2[!(rownames(Cnty_data2) %in% c('CHE 2001','CHE 2002', "CHE 2000", "CHE 2003","CHE 2004", "CHE 2005", "CHE 2006")),18]
+
+# conti_data2 <- conti_data[substr(rownames(Cnty_data), 1,3) %in% Grp1,]
+# Grp10dt2 <- conti_data2[,1:34]
+# Grp10dt2$Total <- conti_data2$Pop.p100k
+# Grp10dt2 <- Grp10dt2[(Grp10dt2$Total > quantile(Grp10dt2$Total, c(.10))) & (Grp10dt2$Total < quantile(Grp10dt2$Total, c(.90))), ]
+#Grp10dt2 <- Grp10dt[(Grp10dt$Total > quantile(Grp10dt$Total, c(.06))) & (Grp10dt$Total < quantile(Grp10dt$Total, c(.94))), ]
+Grp10dt2 <- Grp10dt[(Grp10dt$Total > quantile(Grp10dt$Total, c(.06))) & (Grp10dt$Total < quantile(Grp10dt$Total, c(.94))), ]
+
+set.seed(8193)
+train <- sample(1:nrow(Grp10dt2), nrow(Grp10dt2)/2)
+Grp10dt2.test <- Grp10dt2[-train, "Total"]
+names(Grp10dt2.test) <- rownames(Grp10dt2[-train,])
+```
+
+Fit a Simple Linear Regression
+
+```{r}
+( flmdl <- lm(Total~ Life.Expectancy.O, Grp10dt2, subset = train) )
+yhat.lm <- predict(flmdl, newdata = Grp10dt2[-train,])
+plot(Grp10dt2[-train,'Life.Expectancy.O'], Grp10dt2.test, main = 'Simple Linear Model - Life Expectancy', xlab = 'Life Expectancy', ylab = 'Actual', col = 4)
+abline( 26075.2,-317.3)
+(mse.slr <- mean((yhat.lm - Grp10dt2.test)^2)^0.5)
+(mad.slr <- median(abs(yhat.lm - Grp10dt2.test)))
+
+```
+
+
+```{r}
+# Fit a Linear regression Model 
+library('plot3D')
+fit <- lm(Total~ Life.Expectancy.O + Education.Budget.O, Grp10dt2, subset = train) 
+life.pred <- seq(71, 81.5, length.out = 30) # predict values 2 dim grid 
+Edu.pred <- seq(0.06, 0.14, length.out = 30) #(equivalent to abline in SLR)
+xy <- expand.grid(Education.Budget.O = Edu.pred, Life.Expectancy.O = life.pred)
+total.pred <- matrix (nrow = 30, ncol = 30, 
+  data = predict(fit, newdata = data.frame(xy), 
+  interval = "prediction")[,1])
+scatter3D(z = Grp10dt2$Total, y = Grp10dt2$Life.Expectancy.O
+          , x = Grp10dt2$Education.Budget.O, pch = 18, cex = 2, 
+  theta = 20, phi = 20, ticktype = "detailed",
+  ylab = "Life Exp", xlab = "Edu Budg", zlab = "Total",  
+  surf = list(y = life.pred, x = Edu.pred, z = total.pred),
+  main = "Migration Multilinear Regression")
+yhat.lm <- predict(fit, newdata = Grp10dt2[-train,])
+(mse.mlr <- mean((yhat.lm - Grp10dt2.test)^2)^0.5)
+mad.mlr <- median(abs(yhat.lm - Grp10dt2.test))
+```
+
+
+
+```{r, include=FALSE}
+flmdl <- lm(Total~ . , Grp10dt2, subset = train)
+asy.lm <- step(flmdl, direction = "backward", k = log(n))
+summary(asy.lm)
+#data.frame(Beta = no, row.names = names(asy.lm$coefficients))
+yhat.lm <- predict(asy.lm, newdata = Grp10dt2[-train,])
+names(yhat.lm) <- rownames(Grp10dt2[-train,])
+mse.lm <- mean((yhat.lm - Grp10dt2.test)^2)
+mse.lm^0.5
+mad.lm <- median(abs(yhat.lm - Grp10dt2.test))
+
+```
+
+Splines
+
+```{r, include=FALSE}
+library('splines')
+spflmdl <- lm(Total~ bs(Growth.O + Popultion.O + GDP.O + X..1.90.O 
+                        + Malnourished.O + Maternal.Mortality.O 
+                        + Suicide.Mortality.O + Life.Expectancy.O 
+                        + X..Male.O + X..Rural.O + Death.Rate.O 
+                        + Birth.Rate.O + Natural.Increase.O 
+                        + X..Crop.Production.O + Education.Budget.O 
+                        + Homicide.O), Grp10dt2, subset = train)
+asy.spl <- step(spflmdl, direction = "backward", k = log(n))
+summary(asy.spl)
+```
+
+Trees & Pruning
+
+```{r}
+library('tree')
+summary(Grp10dt2$Total)
+summary(asy.tree)
+library('rpart')
+library('rpart.plot')
+asy.tree.r <- rpart(Total~ ., Grp10dt2, subset = train)
+rpart.plot(asy.tree.r)
+asy.tree <- tree(Total~ . , Grp10dt2, subset = train)
+plot(asy.tree)
+text(asy.tree, pretty = 0)
+# Check if  our tree is worth pruning
+cv.asy <- cv.tree(asy.tree)
+plot(cv.asy$size, cv.asy$dev, type = 'b') # our dev is our deviance & size is the no. of branches
+prune.asy <- prune.tree(asy.tree, best = 5) # looks like it's worth pruning, past 5-7ish our deviance doesn't go down much
+plot(prune.asy, main = Grp_nm)
+text(prune.asy, pretty = 0)
+summary(prune.asy)
+```
+Bagging Example 
+```{r}
+library(ipred)       #for fitting bagged decision trees
+Bagg.Tree <- bagging(Total ~., Grp10dt2
+                        , subset = train, nbagg=1000)
+yhat <- predict(Bagg.Tree, newdata = Grp10dt2[-train,])
+(bagg.rmse <- mean((yhat - Grp10dt2.test)^2)^0.5)
+(bagg.mad <- median(abs(yhat - Grp10dt2.test)))
+```
+
+Random forest
+
+```{r}
+library(randomForest)
+Bag.Tree <- randomForest(Total ~ ., Grp10dt2
+                         , subset = train, mtry = 3, ntree = 1000,  importance = TRUE)
+Bag.Tree
+# varImpPlot(Bag.Tree, type = 1, main = 'Features & Impact on MSE of Migration Model'
+#           , sub='For: Poland, Czechia, Hungary, Romania, Slovakia, Croatia, \n Slovenia, Bulgaria, Serbia, Bosnia, North Macedonia & Montenegro',
+#           col.main="darkred", col.lab="blue", col.sub="black" )
+library(ggalt)
+library(data.table)
+imp <- data.table(importance(Bag.Tree), keep.rownames = TRUE, key = "%IncMSE")[, rn := factor(rn, unique(rn))]
+imp <- data.table(importance(Bag.Tree), keep.rownames = TRUE, 
+                  key = "%IncMSE")
+imp[, rn := factor(rn, unique(rn))]
+ggplot(melt(imp, id.vars="rn")[melt(imp, id.vars="rn")$variable == '%IncMSE'], 
+       aes(x=rn, y=value, label = round(value, 1))) + 
+    geom_lollipop(point.size = 3, point.colour = "cadetblue") +
+    geom_text(nudge_y = 5) +
+    coord_flip() +
+    facet_wrap(~variable) +
+    theme_minimal() +
+    labs(y="Percent", 
+         x=NULL,
+         title = "Features & Impact on MSE of Migration Model",
+         caption = "For: Poland, Czechia, Hungary, Romania, Slovakia, Croatia, Slovenia,\n Bulgaria, Serbia, Bosnia, North Macedonia & Montenegro") +
+    theme(axis.title=element_text(),
+        plot.title=element_text(hjust = myhjust),
+        plot.caption=element_text(hjust = myhjust))
+yhat <- predict(Bag.Tree, newdata = Grp10dt2[-train,], n.trees = 1000)
+(bag.rmse <- mean((yhat - Grp10dt2.test)^2)^0.5)
+(bag.mape <- mean(abs((Grp10dt2.test-yhat)/Grp10dt2.test)))
+(bag.mad <- median(abs(yhat - Grp10dt2.test)))
+
+```
+
+```{r}
+library(gbm)
+library(data.table)
+boost.tree <- gbm(Total~.,data=Grp10dt2[train,-(1:3)], distribution="gaussian"
+                  , n.trees =5000, interaction.depth = 2, shrinkage = 0.15)
+imp <- data.table(summary(boost.tree), keep.rownames = TRUE, key = "rel.inf")[, rn := factor(rn, unique(rn))]
+ggplot(melt(imp, id.vars="rn", measure.vars = "rel.inf" ),
+       aes(x=rn, y=value, label = round(value, 1))) + 
+    geom_lollipop(point.size = 3, point.colour = "cornflowerblue") +
+    geom_text(nudge_y = 4) +
+    coord_flip() +
+    facet_wrap(~variable) +
+    theme_minimal() +
+    labs(title = "Relative Influence on Boosting Model",
+         caption = "For: Poland, Czechia, Hungary, Romania, Slovakia, Croatia, Slovenia,\n Bulgaria, Serbia, Bosnia, North Macedonia & Montenegro") +
+    theme(plot.title=element_text(hjust = myhjust),
+        plot.caption=element_text(hjust = myhjust))
+plot(boost.tree,  i = "X..Male.O")
+plot(boost.tree,  i = "X..Rural.O")
+plot(boost.tree,  i = "Malnourished.O")
+yhat <- predict(boost.tree, newdata = Grp10dt2[-train,], n.trees = 1000)
+(boost.rmse <- mean((yhat - Grp10dt2.test)^2)^0.5)
+(boost.mape <- mean(abs((Grp10dt2.test-yhat)/Grp10dt2.test)))
+(boost.mad <- median(abs(yhat - Grp10dt2.test)))
+
+```
+
+```{r}
+library(BART)
+#?gbart
+ifelse(dim(Grp10dt2)[2]==18,x<-Grp10dt2[,-18],x<- Grp10dt2[,-c(1:3,54)])
+y <- Grp10dt2[,'Total']
+bart.tree <- gbart(x[train,],y[train],x[-train,])
+yhat.bart <- bart.tree$yhat.test.mean
+names(yhat.bart) <- rownames(Grp10dt2[-train,])
+yhat.bart <- (yhat.bart)
+names(y) <- rownames(Grp10dt2)
+y <- (y)
+Grp10dt2.test <- (Grp10dt2.test)
+(bart.rmse <- mean((y[-train] - yhat.bart)^2)^0.5)
+plot(yhat.bart, y[-train], main = Grp_nm )
+abline(0,1)
+(bart.mape <- mean(abs((Grp10dt2.test-yhat)/Grp10dt2.test)))
+(bart.mad <- median(abs(yhat - Grp10dt2.test)))
+(R2 <- 1 - sum((yhat.bart - Grp10dt2.test)^2)/sum((Grp10dt2.test - mean(Grp10dt2.test))^2))
+ord <- order (bart.tree$varcount.mean , decreasing = T)
+data.frame(FeatureCount=round(bart.tree$varcount.mean[ord],1))
+```
+
+XGBoost
+```{r}
+# install.packages('xgboost')     # for fitting the xgboost model
+# install.packages('caret')       # for general data preparation and model fitting
+library(xgboost)
+library(caret)           
+train_xg <- xgb.DMatrix(data = data.matrix(Grp10dt2[train,-18]), label = data.matrix(Grp10dt2[train,18]))
+test_xg <- xgb.DMatrix(data = data.matrix(Grp10dt2[-train,-18]), label = data.matrix(Grp10dt2[-train,18]))
+
+watchlist = list(train=train_xg, test=test_xg)
+
+xg.tree = xgb.train(data = train_xg, max.depth = 3, watchlist=watchlist, nrounds = 100, print_every_n = 0)
+xgboost.tree = xgboost(data = train_xg, max.depth = 2, nrounds = 100, print_every_n = 0)
+summary(xgboost.tree)
+
+yhat <- predict(xgboost.tree, newdata = test_xg)
+(xg.rmse <- mean((yhat - Grp10dt2.test)^2)^0.5)
+plot(yhat, y[-train], main = Grp_nm )
+abline(0,1)
+
+```
+
+# Lin model
+
+```{r}
+yhat.lm <- predict(asy.lm, newdata = Grp10dt2[-train,])
+names(yhat.lm) <- rownames(Grp10dt2[-train,])
+plot(yhat.lm, Grp10dt2.test, main = Grp_nm )
+abline(0,1)
+mse.lm <- mean((yhat.lm - Grp10dt2.test)^2)
+mse.lm^0.5
+(mad.lm <- median(abs(yhat.lm - Grp10dt2.test)))
+
+```
+
+#spline
+
+```{r}
+yhat.spl <- predict(asy.spl, newdata = Grp10dt2[-train,])
+plot(yhat.spl, Grp10dt2.test, main = Grp_nm )
+abline(0,1)
+mse.spl <- mean((yhat.spl - Grp10dt2.test)^2)
+mse.spl^0.5
+(mad.spl <- median(abs(yhat.spl - Grp10dt2.test)))
+```
+
+# Tree
+
+```{r}
+yhat <- predict(asy.tree, newdata = Grp10dt2[-train,])
+plot(yhat, Grp10dt2.test, main = Grp_nm )
+abline(0,1)
+mse <- mean((yhat - Grp10dt2.test)^2)
+mse^0.5
+(mad.tree <- median(abs(yhat - Grp10dt2.test)))
+
+```
+
+# Prune
+
+```{r}
+yhat <- predict(prune.asy, newdata = Grp10dt2[-train,])
+plot(yhat, Grp10dt2.test, main = Grp_nm )
+abline(0,1)
+prune.mse <- mean((yhat - Grp10dt2.test)^2)
+prune.mse^0.5
+(mad.prune <- median(abs(yhat - Grp10dt2.test)))
+```
+
+#Bagging/Random forest Tree
+
+```{r}
+yhat <- predict(Bag.Tree, newdata = Grp10dt2[-train,])
+plot(yhat, Grp10dt2.test, main = Grp_nm )
+abline(0,1)
+bag.mse <- mean((yhat - Grp10dt2.test)^2)
+bag.mse^0.5
+bag.mad <- median(abs(yhat - Grp10dt2.test))
+bag.mad
+bag.mape <- mean(abs((Grp10dt2.test-yhat)/Grp10dt2.test))
+bag.mape
+```
+
+#Boosting
+
+```{r}
+yhat <- predict(boost.tree, newdata = Grp10dt2[-train,], n.trees = 1000)
+names(yhat) <- rownames(Grp10dt2[-train,])
+plot(yhat, Grp10dt2.test, main = Grp_nm )
+abline(0,1)
+boost.mse <- mean((yhat - Grp10dt2.test)^2)
+boost.mse^0.5
+boost.mape <- mean(abs((Grp10dt2.test-yhat)/Grp10dt2.test))
+boost.mape
+bag.mad <- median(abs(yhat - Grp10dt2.test))
+bag.mad
+R2 <- 1 - sum((yhat - Grp10dt2.test)^2)/sum((Grp10dt2.test - mean(Grp10dt2.test))^2)
+R2
+```
+# Comparison for Dissertation
+```{r}
+par(mar = c(5.1, 4.1, 4.1, 2.1))
+par(mar = c(5.1, 4.1, 4.1, 2.1))
+model_names <- c('sd', 'Simp','Multi','Step','Tree','Prune','Bagg','RF','Boost','Bart','Mean')
+results <- c(sd(Grp10dt2.test), mse.slr, mse.mlr, mse.lm^0.5, mse^0.5, prune.mse^0.5, bagg.rmse, bag.mse^0.5, boost.mse^0.5,bart.rmse ,mean(Grp10dt2.test) )
+madresults <- c(sd(Grp10dt2.test), mad.slr, mad.mlr, mad.lm, mad.tree, mad.prune, bagg.mad, bag.mad, boost.mad, bart.mad ,median(Grp10dt2.test) )
+names(results) <- model_names
+names(madresults) <- c('sd', 'Simp','Multi','Step','Tree','Prune','Bagg','RF','Boost','Bart','Median')
+Grp_nm2 <- 'Models for Group: Poland, Czechia, Hungary, Romania, Slovakia, Croatia, \nSlovenia, Bulgaria, Serbia, Bosnia, North Macedonia, Montenegro'
+barplot(results, main = Grp_nm2, xlab = 'Root Mean Square Error', ylab = 'Model Name', col =  c(5,rep(4,9),3), cex.main=.9, las = 2, horiz=TRUE)
+legend('topright', inset=.02, title="Model",
+       c('Standard Dev','Models','Mean'),
+       fill=c(5,4,3), horiz=FALSE, cex=.9)
+barplot(madresults, main = Grp_nm2, xlab = 'Median Absolute Error', ylab = 'Model Name', col =  c(5,rep(4,9),3), cex.main=.9, las = 2, horiz=TRUE)
+legend('topright', inset=.02, title="Model",
+       c('Standard Dev','Models','Median'),
+       fill=c(5,4,3), horiz=FALSE, cex=.9)
+
+```
+
+
+Results comparison
+
+```{r}
+results <- c(sd(Grp10dt2.test), mse.lm^0.5, mse.spl^0.5, mse^0.5, prune.mse^0.5, bag.mse^0.5, boost.mse^0.5,bart.rmse ,mean(Grp10dt2.test) )
+model_names <- c('sd', 'lm','spline','Tree','Pruning','Bagg','Boost','Bart','Mean')
+names(results) <- model_names
+barplot(results, main = Grp_nm, xlab = 'Model Name', ylab = 'Root Mean Square Error', col =  c(5,rep(4,7),3))
+legend('topright', inset=.02, title="Model",
+       model_names,
+       fill=c(5,rep(4,7),3), horiz=FALSE, cex=.7)
+cat(' Sd:', sd(Grp10dt2.test),  ' vs LM:', mse.lm^0.5, ' vs Spl:', mse.spl^0.5, '\n'
+    ,'Tree: ', mse^0.5, ' vs Prune:', prune.mse^0.5, ' vs Bagging:', bag.mse^0.5, '\n'
+    , 'Boosting:', boost.mse^0.5, 'BART:', bart.rmse,' & Mean:', mean(Grp10dt2.test), '\n', Grp_nm, '\n')
+```
+
+# Residual Analysis on Random Forest/Boosting
+
+```{r}
+#Resid analysis (Learn to use Resid tools)
+#yhat <- predict(asy.tree, newdata = Grp10dt2[-train,])
+yhat <- predict(boost.tree, newdata = Grp10dt2[-train,], n.trees = 1000)
+names(yhat) <- rownames(Grp10dt2[-train,])
+#yhat <- predict(Bag.Tree, newdata = Grp10dt2[-train,])
+
+tree.resid <- resid(asy.tree)
+yhat.new <- yhat
+yhat.new[yhat.new<0] <- 0
+tree.resid <- Grp10dt2.test - yhat.new
+mean((Grp10dt2.test - yhat.new)^2)^0.5
+plot(tree.resid, ylab = 'Fitted Residuals', main = Grp_nm )
+# Check which country/year is outlying
+sd <- sd(Grp10dt2.test)
+abline(h = c(sd, 8, -sd, -8))
+outliers.tre <- which(abs(tree.resid) > 2)
+#outliers.tre <- which(abs(tree.resid) > 4, abs(tree.resid) < 8)
+Resid <- tree.resid[outliers.tre]
+Actual <- round(Grp10dt2.test[outliers.tre],1)
+Yhat <- round(yhat[outliers.tre],1)
+outliers.point <- data.frame(Resid, Actual, Yhat)
+outliers.point <- outliers.point[order(abs(Resid),decreasing = TRUE),]   # Return our outlying countries
+outliers.point
+```
+There was the Zug massacre in Switzerland during 2001 - 2002 impacted the our features but not 
+
+
+# No points removed
+ Sd: 2175.996  vs LM: 1104.395  vs Spl: 2185.139 
+ Tree:  525.8619  vs Prune: 525.8619  vs Bagging: 415.0113 
+ Boosting: 919.1513  & Mean: 979.9596 
+ Group: Switzerland, Austria, Bulgaria, Serbia and Kosovo: S/RES/1244 (1999) 
+
+# Outliers removed
+ Sd: 1949.742  vs LM: 764.5444  vs Spl: 2168.622 
+ Tree:  522.1783  vs Prune: 522.1783  vs Bagging: 460.5853 
+ Boosting: 671.3783  & Mean: 803.4372 
+ Group: Switzerland, Austria, Bulgaria, Serbia and Kosovo: S/RES/1244 (1999) 

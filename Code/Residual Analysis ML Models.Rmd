@@ -1,0 +1,261 @@
+---
+title: "Supervised Modelling 2"
+output: html_document
+date: "2023-02-19"
+---
+```{r}
+Models <- function(){
+  train <- sample(1:nrow(Grp10dt), nrow(Grp10dt)/2)
+  Grp10dt.test <- Grp10dt[-train, "Total"]
+  names(Grp10dt.test) <- rownames(Grp10dt[-train,])
+  flmdl <- lm(Total~ log(Popultion.O) + . - Country.O , Grp10dt, subset = train)
+  asy.lm <- step(flmdl, direction = "backward", k = log(n))
+  spflmdl <- lm(Total~ bs(Growth.O + Popultion.O + GDP.O + X..1.90.O 
+                        + Malnourished.O + Maternal.Mortality.O 
+                        + Suicide.Mortality.O + Life.Expectancy.O 
+                        + X..Male.O + X..Rural.O + Death.Rate.O 
+                        + Birth.Rate.O + Natural.Increase.O 
+                        + X..Crop.Production.O + Education.Budget.O 
+                        + Homicide.O), Grp10dt, subset = train)
+  asy.spl <- step(spflmdl, direction = "backward", k = log(n))
+
+}
+```
+
+```{r}
+#Grp10dt2 <- Grp10dt[!(rownames(Grp10dt) %in% rownames(outliers.point)),]
+#Grp10dt2 <- Grp10dt[!(substr(rownames(Grp10dt), 13,15) %in% c("SRB","DEU")),]
+#Grp10dt2 <- Grp10dt[!(substr(rownames(Grp10dt), 6,8) %in% c("SRB","BGR")),]
+Grp10dt2 <- Grp10dt[(Grp10dt$Total > quantile(Grp10dt$Total, c(.06))) & (Grp10dt$Total < quantile(Grp10dt$Total, c(.94))), ]
+#Grp10dt2 <- Grp10dt
+set.seed(8193)
+train <- sample(1:nrow(Grp10dt2), nrow(Grp10dt2)/2)
+Grp10dt2.test <- Grp10dt2[-train, "Total"]
+names(Grp10dt2.test) <- rownames(Grp10dt2[-train,])
+```
+ 
+Train our models: linear
+
+```{r, include=FALSE}
+flmdl <- lm(Total~ log(Popultion.O) + . - Country.O , Grp10dt2, subset = train)
+asy.lm <- step(flmdl, direction = "backward", k = log(n))
+#asy.lm <- lm(Total ~. , Grp10dt2, subset = train)
+summary(asy.lm)
+asy.lm$coefficients
+```
+
+Splines
+
+```{r, include=FALSE}
+library('splines')
+spflmdl <- lm(Total~ bs(Growth.O + Popultion.O + GDP.O + X..1.90.O 
+                        + Malnourished.O + Maternal.Mortality.O 
+                        + Suicide.Mortality.O + Life.Expectancy.O 
+                        + X..Male.O + X..Rural.O + Death.Rate.O 
+                        + Birth.Rate.O + Natural.Increase.O 
+                        + X..Crop.Production.O + Education.Budget.O 
+                        + Homicide.O), Grp10dt2, subset = train)
+asy.spl <- step(spflmdl, direction = "backward", k = log(n))
+summary(asy.spl)
+```
+
+Trees & Pruning
+
+```{r}
+library('tree')
+asy.tree <- tree(Total~ log(Popultion.A) + . , Grp10dt2, subset = train)
+summary(Grp10dt2$Total)
+summary(asy.tree)
+library('rpart')
+library('rpart.plot')
+asy.tree.r <- rpart(Total~ log(Popultion.A) + ., Grp10dt2, subset = train)
+rpart.plot(asy.tree.r)
+plot(asy.tree)
+text(asy.tree, pretty = 0)
+# Check if  our tree is worth pruning
+cv.asy <- cv.tree(asy.tree)
+plot(cv.asy$size, cv.asy$dev, type = 'b') # our dev is our deviance & size is the no. of branches
+prune.asy <- prune.tree(asy.tree, best = 9) # looks like it's worth pruning, past 5-7ish our deviance doesn't go down much
+plot(prune.asy, main = Grp_nm)
+text(prune.asy, pretty = 0)
+summary(prune.asy)
+```
+
+Random forest
+
+```{r}
+library(randomForest)
+Bag.Tree <- randomForest(Total ~ log(Popultion.O) + ., Grp10dt2
+                         , subset = train, mtry = 19, ntree = 1000,  importance = TRUE)
+Bag.Tree
+```
+
+```{r}
+library(gbm)
+Boostdata <- Grp10dt2[train,-(1:3)]
+#Boostdata$ISO.O <- factor(Grp10dt2[train,'ISO.O'], labels = unique(Grp10dt2$ISO.O))
+#Boostdata$Continent.A <- factor(Grp10dt2[train, 'Continent.A'], labels = unique(Grp10dt2$Continent.A))
+boost.tree <- gbm(Total~.,data=Boostdata, distribution="gaussian"
+                  , n.trees =5000, interaction.depth = 5, shrinkage = 0.1)
+boost.tree
+summary(boost.tree)
+```
+
+# Lin model
+
+```{r}
+yhat.lm <- predict(asy.lm, newdata = Grp10dt2[-train,])
+names(yhat.lm) <- rownames(Grp10dt2[-train,])
+plot(yhat.lm, Grp10dt2.test, main = Grp_nm )
+abline(0,1)
+mse.lm <- mean((yhat.lm - Grp10dt2.test)^2)
+mse.lm^0.5
+```
+
+#spline
+
+```{r}
+yhat.spl <- predict(asy.spl, newdata = Grp10dt2[-train,])
+plot(yhat.spl, Grp10dt2.test, main = Grp_nm )
+abline(0,1)
+mse.spl <- mean((yhat.spl - Grp10dt2.test)^2)
+mse.spl^0.5
+```
+
+# Tree
+
+```{r}
+yhat <- predict(asy.tree, newdata = Grp10dt2[-train,])
+plot(yhat, Grp10dt2.test, main = Grp_nm )
+abline(0,1)
+mse <- mean((yhat - Grp10dt2.test)^2)
+mse^0.5
+```
+
+# Prune
+
+```{r}
+yhat <- predict(prune.asy, newdata = Grp10dt2[-train,])
+plot(yhat, Grp10dt2.test, main = Grp_nm )
+abline(0,1)
+prune.mse <- mean((yhat - Grp10dt2.test)^2)
+prune.mse^0.5
+```
+
+#Bagging/Random forest Tree
+
+```{r}
+yhat <- predict(Bag.Tree, newdata = Grp10dt2[-train,])
+plot(yhat, Grp10dt2.test, main = Grp_nm )
+abline(0,1)
+bag.mse <- mean((yhat - Grp10dt2.test)^2)
+bag.mad <- median(abs(yhat - Grp10dt2.test))
+bag.mape <- mean(abs((Grp10dt2.test-yhat)/Grp10dt2.test))
+bag.mse^0.5
+bag.mad
+bag.mape
+```
+
+#Boosting
+
+```{r}
+yhat <- predict(boost.tree, newdata = Grp10dt2[-train,], n.trees = 1000)
+names(yhat) <- rownames(Grp10dt2[-train,])
+plot(yhat, Grp10dt2.test, main = Grp_nm )
+abline(0,1)
+boost.mse <- mean((yhat - Grp10dt2.test)^2)
+boost.mse^0.5
+boost.mad <- median(abs(yhat - Grp10dt2.test))
+boost.mad
+boost.mape <- mean(abs((Grp10dt2.test-yhat)/Grp10dt2.test))
+boost.mape
+1 - sum((yhat - Grp10dt2.test)^2)/sum((Grp10dt2.test - mean(Grp10dt2.test))^2)
+
+```
+
+Results comparison
+
+```{r}
+results <- c(sd(Grp10dt2.test), mse.lm^0.5, mse.spl^0.5, mse^0.5, prune.mse^0.5, bag.mse^0.5, boost.mse^0.5, mean(Grp10dt2.test))
+model_names <- c('sd', 'lm','spline','Tree','Pruning','Bagg','Boost','Mean')
+names(results) <- model_names
+barplot(results, main = Grp_nm, xlab = 'Model Name', ylab = 'Mean Square Error')
+cat(' Sd:', sd(Grp10dt2.test),  ' vs LM:', mse.lm^0.5, ' vs Spl:', mse.spl^0.5, '\n'
+    ,'Tree: ', mse^0.5, ' vs Prune:', prune.mse^0.5, ' vs Bagging:', bag.mse^0.5, '\n'
+    , 'Boosting:', boost.mse^0.5, ' & Mean:', mean(Grp10dt2.test), '\n', Grp_nm, '\n')
+
+```
+
+# Residual Analysis on Random Forest 
+
+```{r}
+#Resid analysis (Learn to use Resid tools)
+#yhat <- predict(asy.tree, newdata = Grp10dt2[-train,])
+yhat <- predict(boost.tree, newdata = Grp10dt2[-train,], n.trees = 1000)
+tree.resid <- resid(asy.tree)
+tree.resid <- Grp10dt2.test - yhat
+
+plot(tree.resid, fitted(asy.tree), ylab = 'Fitted Residuals', main = Grp_nm )
+# Check which country/year is outlying
+sd <- sd(Grp10dt2.test)
+abline(h = c(sd, 8, -sd, -8))
+outliers.tre <- which(abs(tree.resid) > sd)
+#outliers.tre <- which(abs(tree.resid) > 4, abs(tree.resid) < 8)
+Resid <- tree.resid[outliers.tre]
+Actual <- round(Grp10dt2.test[outliers.tre], 2
+                )
+Yhat <- round(yhat[outliers.tre], 2)
+outliers.point <- data.frame(Resid, Actual, Yhat)
+outliers.point <- outliers.point[order(abs(Resid),decreasing = TRUE),]   # Return our outlying countries
+outliers.point
+```
+
+# No points removed
+ Sd: 518.1634  vs LM: 452.5282  vs Spl: 518.3632 
+ Tree:  332.05  vs Prune: 345.903  vs Bagging: 202.0411 
+ Boosting: 192.1401  & Mean: 100.8664 
+ Group: Switzerland, Austria, Bulgaria, Serbia and Kosovo: S/RES/1244 (1999) 
+# Migration to Serbia removed 
+ Sd: 173.3855  vs LM: 158.4587  vs Spl: 173.2589 
+ Tree:  137.1258  vs Prune: 137.1258  vs Bagging: 84.75299 
+ Boosting: 91.20684  & Mean: 32.76156 
+ Group: Switzerland, Austria, Bulgaria, Serbia and Kosovo: S/RES/1244 (1999) 
+
+# Migration to Serbia and Germany removed
+ Sd: 38.90581  vs LM: 39.49269  vs Spl: 39.22775 
+ Tree:  34.65803  vs Prune: 37.91369  vs Bagging: 23.17304 
+ Boosting: 27.58492  & Mean: 13.64831 
+ Group: Switzerland, Austria, Bulgaria, Serbia and Kosovo: S/RES/1244 (1999) 
+
+# Outliers Removed 
+ Sd: 409.177  vs LM: 4457.306  vs Spl: 408.8852 
+ Tree:  310.479  vs Prune: 310.479  vs Bagging: 181.6382 
+ Boosting: 171.4626  & Mean: 70.96938 
+ Group: Switzerland, Austria, Bulgaria, Serbia and Kosovo: S/RES/1244 (1999) 
+
+# Some Co-linear features removed 
+ Sd: 518.1634  vs LM: 495.496  vs Spl: 518.3632 
+ Tree:  162.2952  vs Prune: 162.2952  vs Bagging: 153.9655 
+ Boosting: 177.9439  & Mean: 100.8664 
+ Group: Switzerland, Austria, Bulgaria, Serbia and Kosovo: S/RES/1244 (1999) 
+
+# Asylum Statistic & Outliers removed 
+ Sd: 423.5624  vs LM: 407.1349  vs Spl: 423.3155 
+ Tree:  164.1343  vs Prune: 164.1343  vs Bagging: 148.7401 
+ Boosting: 149.6539  & Mean: 76.50393 
+ Group: Switzerland, Austria, Bulgaria, Serbia and Kosovo: S/RES/1244 (1999) 
+
+# Asylum Statistic & Migration to Serbia and Germany removed
+ Sd: 38.90581  vs LM: 39.43242  vs Spl: 39.22775 
+ Tree:  38.73782  vs Prune: 37.7527  vs Bagging: 24.76103 
+ Boosting: 27.16128  & Mean: 13.64831 
+ Group: Switzerland, Austria, Bulgaria, Serbia and Kosovo: S/RES/1244 (1999)
+ 
+# above 95% and below 1% totals removed in data 
+ Sd: 27.89073  vs LM: 164.2712  vs Spl: 27.87576 
+ Tree:  27.15794  vs Prune: 26.40784  vs Bagging: 17.0725 
+ Boosting: 16.47979  & Mean: 11.0534 
+ Group: Switzerland, Austria, Bulgaria, Serbia and Kosovo: S/RES/1244 (1999) 
+
+
+

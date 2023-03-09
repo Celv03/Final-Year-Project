@@ -7,7 +7,7 @@ date: "2023-01-27"
 Upload Data
 
 ```{r}
-#MgrDt <- read.csv(file = "/Users/kelvin/Desktop/Maths/Final Year Project/Migration Full Data - Clear Names.csv", blank.lines.skip = FALSE)
+MgrDt <- read.csv(file = "/Users/kelvin/Desktop/Maths/Final Year Project/Migration Full Data - Clear Names.csv", blank.lines.skip = FALSE)
 colnames(MgrDt)
 
 ```
@@ -270,7 +270,32 @@ row.names(w) <- euro.cntry
 Cnty_data <- w
 df.Eurodt # full version EuroDt.no_na is just numerics
 Cnty_data
+```
 
+Sum for Country, Year, & Continent
+```{r}
+Cont.dt <- data.frame(df.Eurodt[c(2,5:39,56)], row.names = NULL, stringsAsFactors=FALSE)
+euro.Cont <- unique(paste(df.Eurodt$ISO.O, df.Eurodt$Year, df.Eurodt$Continent.A)) # split our countries 
+n <- length(euro.Cont)
+w <- data.frame(matrix(NA, ncol = 35))
+col.nam <- c(names(Cont.dt[3:36]), 'Pop.p100k' )
+colnames(w) <- col.nam
+for (i in 1:n){
+  Country <- substr(euro.Cont[i], 1,3)
+  Year <- substr(euro.Cont[i], 5,8)
+  Continent.A <- substr(euro.Cont[i], 10,20)
+  cnrty.in <- Cont.dt[Cont.dt$ISO.O == Country 
+                      & Cont.dt$Year == Year
+                      & Cont.dt$Continent.A == Continent.A,]
+  #Pop.p100k <- sum(cnrty.in[18])/nrow(unique(cnrty.in[2]))
+  Pop.p100k <- sum(cnrty.in[,'Total'])
+  w <- rbind(w, data.frame(t(colMeans(cnrty.in[3:36])), Pop.p100k, stringsAsFactors = FALSE) ) #want 100k per decision to be sum of countries but mean of years
+}
+w$Continent.A <- substr(euro.Cont, 10,20)
+w <- w[2:(n+1),] # remove our NA's
+row.names(w) <- euro.Cont
+conti_data <- w
+conti_data
 ```
 
 PCA Example
@@ -356,8 +381,8 @@ hierarchial Clustering complete vs average vs single
 
 ```{r}
 x <- Orgn.co.dt
-hc.complete <- hclust(dist(x), method = 'complete')
-hc.average <- hclust(dist(x), method = 'average')
+hc.complete <- hclust(dist(scale(x)), method = 'complete')
+hc.average <- hclust(dist(scale(x)), method = 'average')
 hc.single <- hclust(dist(x), method = 'single')
 plot(hc.complete, main = " Complete Linkage ", xlab = "", sub = "", cex = .9)
 abline(h = 9000200, col = 'red')
@@ -366,7 +391,7 @@ plot(hc.single, main = " Single Linkage ", xlab = "", sub = "", cex = .9)
 ```
 
 ```{r}
-hc.complete <- hclust(dist(x), method = 'complete')
+hc.complete <- hclust(dist(scale(x)), method = 'complete')
 n <- attributes(dist(x))$Size # Number of variables
 data.m <- as.matrix(dist(x)^2) # Type conversion for model fitting
 ori.sse <- sum ( dist(x)^2 )/n # RSS
@@ -404,7 +429,7 @@ plot(gcv, type = 'o', xlab = 'No. of Clusters', ylab = 'Generalised Cross Valida
 using complete hierarchial clustering with n = 12 find mean and standard deviation on all groups then decide which group to use for modelling
 
 ```{r}
-n <- 12
+n <- 4
 (sort(Country_Grp <- cutree(hc.complete,n))) # will look at 2,3,7
 #(sort(Country_Grp <- sort(km.out11$cluster)) )# will look at 2,3,7
 analysis <- c()
@@ -423,53 +448,14 @@ for (i in unique(Country_Grp)){
 ```
 
 ```{r}
-fulltotals <-c()
-for (j in 2000:2020){
-  totals <- c(0, 0, 0, 0)
-  names(totals) <- Grp1
-for (i in row.names(grpex[grpex$Year == j,]) ){
-  totals[substring(i,6,8)] <- totals[substring(i,6,8)] + grpex[i, 'Total']
-    
-}
-  fulltotals <- rbind(fulltotals, totals)
-}
-
-row.names(fulltotals) <- 2000:2020
-```
-
-```{r}
-plot(2000:2020, scale(fulltotals[,1]), col = 'red', xlab = 'Year', ylab = 'Total', ylim = c(-3, 3), type = 'o', main = 'Outward Migration plot-Switzerland, Austria')
-lines(2000:2020, scale(fulltotals[,2]), col = 'green', type = 'o')
-lines(2000:2020, scale(fulltotals[,3]), col = 8, xlab = 'Year', ylab = 'Total', ylim = c(0,2), type = 'o', main = 'Outward Migration plot-Serbia, Bulgaria')
-lines(2000:2020, scale(fulltotals[,4]), col = 5, type = 'o')
-legend('topright', inset=.02, title="Country",
-       c("CHE", "AUT", "BGR", "SRB"),
-       fill=c("red","green", 8,5), horiz=FALSE, cex=.9)
-
-
-plot(2000:2020, fulltotals[,1], col = 'red', xlab = 'Year', ylab = 'Total', ylim = c(0, 1.05), type = 'o', main = 'Outward Migration plot-Switzerland, Austria')
-lines(2000:2020, fulltotals[,2], col = 'green', type = 'o')
-legend('topright', inset=.02, title="Country",
-       c("CHE", "AUT"),
-       fill=c("red","green"), horiz=FALSE, cex=.9)
-plot(2000:2020, fulltotals[,3], col = 8, xlab = 'Year', ylab = 'Total', ylim = c(0, 9500), type = 'o', main = 'Outward Migration plot-Serbia, Bulgaria')
-lines(2000:2020, fulltotals[,4], col = 5, type = 'o')
-legend('topright', inset=.02, title="Country",
-       c("BGR", "SRB"),
-       fill=c(8,5), horiz=FALSE, cex=.9)
-#plot(grpex$Year,grpex$Total, col = 2)
-#text(grpex$Year,grpex$Total, substring(row.names(grpex),6,8), cex=0.6, pos=4, col="red")
-#boxplot(grpex$Total, scale = TRUE)
-grpex[which(grpex$Total > 80,arr.ind = TRUE),c(1,51)]
-boxplot(grpex[which(grpex$Total < 100,arr.ind = TRUE),51])
-#```
-
-```{r}
-i <- 6
+i <- 3
 (Grp1 <- names(Country_Grp[Country_Grp == i]))
 Grp10dt <- df.Eurodt[df.Eurodt$ISO.O %in% Grp1,]
 #Grp10dt <- Grp10dt[Grp10dt$Year > 2004,]
 #Grp10dt$ISO.O <-c(CHE=1,AUT=2, SRB=3, BGR = 4)[Grp10dt$ISO.O]
+#Grp10dt$ISO.A <- 1:length(unique(Grp10dt$ISO.A))
+Country_Code <- cbind(1:length(unique(Grp10dt$ISO.A)), unique(Grp10dt$ISO.A))
+colnames(Country_Code) <- c('No','Country')
 grpex <- Filter(function(x)(typeof(x) != 'character'), Grp10dt)
 grpex <- Filter(function(x)(length(unique(x))>1), grpex)
 #biplot(pr.out)
@@ -502,23 +488,6 @@ Create a sample of training data and create our set of testing data
 
 Scale my response to N(0,1) then compare trends and then model with trees etc. Then Unscale result. Do Residual analysis to check if which models are more suitable.
 
-```{r}
-#Need to scale by country then unscale these are the functions to scale via country
-scales <- c()
-#  unscl.Xhat <- t(apply(Xhat, 1, 
-#           function(r) r * attr(Xhat, 'scaled:scale') + 
-#            attr(Xhat, 'scaled:center')))
-for (i in unique(Grp10dt$ISO.O)){
-  scaler <- scale(Grp10dt[Grp10dt$ISO.O == i,'Total'])
-  #Grp10dt[Grp10dt$ISO.O == i,'Total'] <- scale(Grp10dt[Grp10dt$ISO.O == i,'Total'])
-  scales <- cbind(scales, c(attr(scaler, 'scaled:scale'), attr(scaler, 'scaled:center')))
-}
-scales <- rbind(c(1, 1, 1, 1), c(0, 0, 0, 0))
-
-colnames(scales) <- unique(Grp1)
-row.names(scales) <- c('scale', 'center')
-scales
-```
 
 ```{r}
 train <- sample(1:nrow(Grp10dt), nrow(Grp10dt)/2)
@@ -566,7 +535,7 @@ text(asy.tree, pretty = 0)
 # Check if  our tree is worth pruning
 cv.asy <- cv.tree(asy.tree)
 plot(cv.asy$size, cv.asy$dev, type = 'b') # our dev is our deviance & size is the no. of branches
-prune.asy <- prune.tree(asy.tree, best = 3) # looks like it's worth pruning, past 5-7ish our deviance doesn't go down much
+prune.asy <- prune.tree(asy.tree, best = 4) # looks like it's worth pruning, past 5-7ish our deviance doesn't go down much
 plot(prune.asy, main = Grp_nm)
 text(prune.asy, pretty = 0)
 summary(prune.asy)
@@ -589,27 +558,10 @@ boost.tree
 summary(boost.tree)
 ```
 
-unscale my results
-
-```{r}
-unscaler <- function(vec){
-  for (i in names(vec)){
-    vec[i] <- scales['center',substr(i, 6,8)] + vec[i]*scales['scale',substr(i, 6,8)]
-  }
-  return(vec)
-}
-```
-
-```{r}
-Grp10dt.test <- unscaler(Grp10dt.test)
-```
-
-
 # Lin model
 
 ```{r}
 yhat.lm <- predict(asy.lm, newdata = Grp10dt[-train,])
-yhat.lm <- unscaler(yhat.lm)
 names(yhat.lm) <- rownames(Grp10dt[-train,])
 plot(yhat.lm, Grp10dt.test, main = Grp_nm )
 abline(0,1)
@@ -621,7 +573,6 @@ mse.lm^0.5
 
 ```{r}
 yhat.spl <- predict(asy.spl, newdata = Grp10dt[-train,])
-yhat.spl <- unscaler(yhat.spl)
 plot(yhat.spl, Grp10dt.test, main = Grp_nm )
 abline(0,1)
 mse.spl <- mean((yhat.spl - Grp10dt.test)^2)
@@ -632,7 +583,6 @@ mse.spl^0.5
 
 ```{r}
 yhat <- predict(asy.tree, newdata = Grp10dt[-train,])
-yhat <- unscaler(yhat)
 plot(yhat, Grp10dt.test, main = Grp_nm )
 abline(0,1)
 mse <- mean((yhat - Grp10dt.test)^2)
@@ -643,7 +593,6 @@ mse^0.5
 
 ```{r}
 yhat <- predict(prune.asy, newdata = Grp10dt[-train,])
-yhat <- unscaler(yhat)
 plot(yhat, Grp10dt.test, main = Grp_nm )
 abline(0,1)
 prune.mse <- mean((yhat - Grp10dt.test)^2)
@@ -654,7 +603,6 @@ prune.mse^0.5
 
 ```{r}
 yhat <- predict(Bag.Tree, newdata = Grp10dt[-train,])
-yhat <- unscaler(yhat)
 plot(yhat, Grp10dt.test, main = Grp_nm )
 abline(0,1)
 bag.mse <- mean((yhat - Grp10dt.test)^2)
@@ -666,7 +614,6 @@ bag.mse^0.5
 ```{r}
 yhat <- predict(boost.tree, newdata = Grp10dt[-train,], n.trees = 1000)
 names(yhat) <- rownames(Grp10dt[-train,])
-yhat <- unscaler(yhat)
 plot(yhat, Grp10dt.test, main = Grp_nm )
 abline(0,1)
 boost.mse <- mean((yhat - Grp10dt.test)^2)
@@ -823,16 +770,5 @@ write.csv(df.Results,"/Users/kelvin/Desktop/Maths/Final Year Project/CognosResul
 write.csv(df.Actuals,"/Users/kelvin/Desktop/Maths/Final Year Project/CognosActuals.csv", row.names=FALSE)
 write.csv(df.RMSE,"/Users/kelvin/Desktop/Maths/Final Year Project/CognosRMSE.csv", row.names=FALSE)
 write.csv(df.Impact,"/Users/kelvin/Desktop/Maths/Final Year Project/CognosImpact.csv", row.names=FALSE)
-
-```
-
-XGBoost
-
-```{r}
-require(xgboost)
-boosting(Total~.,data=Grp10dt[train,-(1:3)], distribution="gaussian"
-                  , n.trees =5000, interaction.depth = 3, shrinkage = 0.2)
-bstDense <- xgboost(data = data=Grp10dt[train,-(1:3)], label = Total, max.depth = 2, eta = 1, nthread = 2, nrounds = 2, objective = "binary:logistic")
-
 
 ```
